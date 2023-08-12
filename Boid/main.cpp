@@ -6,6 +6,7 @@ vector<Boid> g_vectorBoid;
 
 int main()
 {
+	// rand set
 	srand(time(NULL));
 	// creation of screen
 	int fps = 60;
@@ -16,24 +17,14 @@ int main()
 
 	// creation of ai
 	g_vectorBoid.reserve(10);
-	for (int i = 0; i < 80; ++i)
+	for (int i = 0; i < 15; ++i)
 	{
-		// FLOCK && SEEK
-		g_vectorBoid.emplace_back(Vector2D(rand() % 1920, rand() % 1080), Vector2D::FRONT, 10, STATE::FLOCK | STATE::SEEK, 45.0f, 200.0f, i);
-		//g_vectorBoid.emplace_back((0, 0), Vector2D::FRONT, 10, STATE::PATHFOLLOW, 45.0f, 200.0f, i);
+		// HIVEMIND && SEEK
+		g_vectorBoid.emplace_back(Vector2D(rand() % 1920, rand() % 1080), Vector2D::FRONT, 10,STATE::PATHFOLLOW, 45.0f, 300.0f, i);
 		Boid& boid = g_vectorBoid[i];
 		boid.SetWindow(window);
 		boid.m_obstacleVec.emplace_back();
 	}
-
-	// obstacle set
-	//for (int j = 0; j < m_vectorBoid.size(); ++j)
-	//{
-	//	for (int i = 0; i < m_vectorBoid[j]->m_obstacleVec.size(); ++i)
-	//	{
-	//		m_vectorBoid[j]->m_obstacleVec[i].Start();
-	//	}
-	//}
 
 	// loop
 	sf::Clock clock;

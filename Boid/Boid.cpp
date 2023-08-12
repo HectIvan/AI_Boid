@@ -4,7 +4,7 @@ Boid::Boid()
 {
 }
 
-Boid::Boid(Vector2D position, Vector2D direction, float radius, int currentState, float visualRange, float speed, int ID, int mass)
+Boid::Boid(Vector2D position, Vector2D direction, float radius, int currentState, float visualRange, float speed, int ID, float mass)
 {
 	m_position = position;
 	m_direction = direction;
@@ -18,6 +18,7 @@ Boid::Boid(Vector2D position, Vector2D direction, float radius, int currentState
 	m_ID = ID;
 	m_visualCone = visualRange;
 	m_speed = speed;
+	m_mass = mass;
 
 	m_pathPoints.resize(4);
 	m_pathPoints[0] = Vector2D(100, 100);
@@ -30,7 +31,6 @@ Boid::~Boid()
 {
 }
 sf::VertexArray g_lines(sf::LinesStrip, 2);
-int g_i = 0;
 void Boid::Update(float DeltaTime, vector<Boid>& vecBoid)
 {
 	float perc = 1;
@@ -46,12 +46,12 @@ void Boid::Update(float DeltaTime, vector<Boid>& vecBoid)
 
 	if ((m_currentState & STATE::SEEK) == STATE::SEEK)
 	{
-		desiredForce += Seek(cursorPos, 5);
+		desiredForce += Seek(cursorPos, 8.0f);
 	}
 	if ((m_currentState & STATE::FLEE) == STATE::FLEE)
 	{
 		//m_circleShape.setFillColor(sf::Color::White);
-		desiredForce += Flee(cursorPos, 100, 6);
+		desiredForce += Flee(cursorPos, 100, 6.0f);
 	}
 	if ((m_currentState & STATE::PURSUIT) == STATE::PURSUIT)
 	{
@@ -64,42 +64,17 @@ void Boid::Update(float DeltaTime, vector<Boid>& vecBoid)
 	}
 	if ((m_currentState & STATE::PATHFOLLOW) == STATE::PATHFOLLOW)
 	{
-		/*if ((m_pathPoints[m_currentPos] - m_position).Magnitude() < 20)
+		desiredForce += PathFollowing(m_pathPoints, 6.0f);
+		if ((m_pathPoints[m_i] - m_position).Magnitude() < 200)
 		{
-			if (m_currentPos < m_pathPoints.size())
-				m_currentPos++;
-			else
-				m_currentPos = 0;
+			++m_i;
 		}
-		desiredForce += PathFollowing(m_pathPoints[m_currentPos], 30);
-		if (m_currentPos != m_pathPoints.size())
-		{
-			desiredForce += PathFollowing(m_pathPoints[m_currentPos + 1], 30);
-		}*/
-		float t = 0;
-		t += DeltaTime;
-		Vector2D target;
-		if (1 + g_i < m_pathPoints.size())
-		{
-			target = Beziel(m_position, m_pathPoints[0 + g_i], m_pathPoints[1 + g_i], t);
-			if ((m_position - m_pathPoints[1 + g_i]).Magnitude() < 400)
-			{
-				std::cout << g_i;
-				++g_i;
-			}
-		}
-		desiredForce += (target - m_position) * 5.0f;
 	}
 	if ((m_currentState & STATE::WANDER) == STATE::WANDER)
 	{
 		m_timer += DeltaTime;
 		Vector2D pos = Vector2D(0);
 		pos = Wander(100, m_visualCone);
-		/*if (m_timer > 1)
-		{
-			pos = Wander(200, m_visualCone);
-			m_timer = 0;
-		}*/
 		desiredForce += Seek(pos, 5);
 		Vector2D a = m_direction * m_speed + desiredForce;
 		m_direction = a;
@@ -123,9 +98,6 @@ void Boid::Update(float DeltaTime, vector<Boid>& vecBoid)
 		if (m_ID != vecBoid.size() - 1)
 		{
 			desiredForce += LeaderFollowing(vecBoid, 20, 5, perc);
-
-			// render lines
-			
 		}
 		else
 		{
@@ -135,33 +107,54 @@ void Boid::Update(float DeltaTime, vector<Boid>& vecBoid)
 	}
 	if ((m_currentState & STATE::ARRIVAL) == STATE::ARRIVAL)
 	{
-		desiredForce += Arrival(cursorPos, 20, 5, perc); // TEMPORAL
+		desiredForce += Arrival(cursorPos, 20, 5, perc);
 	}
 	if ((m_currentState & STATE::OBSTACLEAVOID) == STATE::OBSTACLEAVOID)
 	{
 		desiredForce += ObstacleAvoid(m_obstacleVec[0], 30, 50);
 	}
-	if ((m_currentState & STATE::FLOCK) == STATE::FLOCK)
+	if ((m_currentState & STATE::HIVEMIND) == STATE::HIVEMIND)
 	{
 		for (int i = 0; i < vecBoid.size(); ++i)
 		{
 			desiredForce += Seek(vecBoid[i].m_position, 1);
 		}
 	}
+	if ((m_currentState & STATE::FLOCK) == STATE::FLOCK)
+	{
+		desiredForce += Seek(cursorPos, 3);
+		Vector2D averageDirection = Vector2D(0);
+		int c = 0;
+		for (int i = 0; i < vecBoid.size(); ++i)
+		{
+			if ((vecBoid[i].m_position - m_position).Magnitude() < 75.0f)
+			{
+				averageDirection += vecBoid[i].m_direction;
+				desiredForce += Flee(vecBoid[i].m_position, 50, 5);
+				c = i;
+			}
+		}
+		if (c > 0)
+		{
+			averageDirection /= c;
+		}
+		m_direction += averageDirection;
+	}
 
 	for (int i = 0; i < vecBoid.size(); ++i)
 	{
-		desiredForce += Flee(vecBoid[i].m_position, 50, 5);
+		desiredForce += Flee(vecBoid[i].m_position, 50, 10.0f);
 	}
 
-	// FIX PATH FOLLOW
-	// REYNOLDS BEHAVIOUR
-	Vector2D a = (m_direction * (desiredForce * m_speed) / m_mass) * perc;
+	Vector2D a = (desiredForce + (m_direction * m_speed) / m_mass) * perc;
 	if (perc > 0.0f)
 	{
-		m_direction = a;
-		m_direction.Normalize();
-		m_position += a * DeltaTime;
+		if (a.Magnitude() > 0)
+		{
+			m_direction = a;
+			m_direction.Normalize();
+			m_position += a * DeltaTime;
+		}
 	}
 	ScreenWrapping();
 }
@@ -174,6 +167,7 @@ void DrawLines(Vector2D start, Vector2D end)
 	g_lines[1].color = sf::Color::Cyan;
 }
 
+// screen wrapping for the boid instance
 void Boid::ScreenWrapping()
 {
 	if (m_position.x > 1920) { m_position.x = 0; }
@@ -182,6 +176,7 @@ void Boid::ScreenWrapping()
 	if (m_position.y < 0) { m_position.y = 1080; }
 }
 
+// prediction of future cursor location
 Vector2D Boid::SimplePredict(Vector2D currPos, Vector2D prevPos)
 {
 	Vector2D changeVector = Vector2D(currPos - prevPos);
@@ -190,6 +185,7 @@ Vector2D Boid::SimplePredict(Vector2D currPos, Vector2D prevPos)
 	return currPos + changeVector * magnitude * 100.0f;
 }
 
+// render screen
 void Boid::Render(std::shared_ptr<sf::RenderWindow> window)
 {
 	m_circleShape.setPosition(m_position.x, m_position.y);
@@ -198,6 +194,7 @@ void Boid::Render(std::shared_ptr<sf::RenderWindow> window)
 	window->draw(g_lines);
 }
 
+// seek behaviour
 Vector2D Boid::Seek(Vector2D pos, float magnitude)
 {
 	Vector2D force = pos - m_position;
@@ -205,7 +202,6 @@ Vector2D Boid::Seek(Vector2D pos, float magnitude)
 	{
 		force.Normalize();
 		force *= magnitude;
-
 		return force;
 	}
 	else
@@ -214,33 +210,32 @@ Vector2D Boid::Seek(Vector2D pos, float magnitude)
 	}
 }
 
+// flee behaviour
 Vector2D Boid::Flee(Vector2D pos, float action_radio, float magnitude)
 {
 	Vector2D force = m_position - pos;
 	float magn = force.Magnitude();
 	if (magn < action_radio && magn > 0)
 	{
-		//m_circleShape.setFillColor(sf::Color::Magenta);
 		if (magn > 0)
 		{
 			force.Normalize();
 			force *= magnitude;
 			return force;
 		}
+		else { return Vector2D(0); }
 	}
-
 	return Vector2D(0);
 }
 
+// pursuit behaviour
 Vector2D Boid::Pursuit(Vector2D currPos, Vector2D prevPos, float vel, bool isCursor)
 {
-	if (isCursor)
-	{
-		return Seek(SimplePredict(currPos, prevPos), vel);
-	}
+	if (isCursor) { return Seek(SimplePredict(currPos, prevPos), vel); }
 	return Vector2D(0);
 }
 
+// evade behaviour
 Vector2D Boid::Evade(Vector2D currPos, Vector2D prevPos, float action_radio, float magnitude, bool isCursor)
 {
 	if (isCursor)
@@ -250,6 +245,7 @@ Vector2D Boid::Evade(Vector2D currPos, Vector2D prevPos, float action_radio, flo
 	return Vector2D(0);
 }
 
+// obstacle avoid behaviour
 Vector2D Boid::ObstacleAvoid(Obstacle& obstacle, float magnitude, float tolerance)
 {
 	if ((m_position - obstacle.GetPosition()).Magnitude() < tolerance)
@@ -258,39 +254,45 @@ Vector2D Boid::ObstacleAvoid(Obstacle& obstacle, float magnitude, float toleranc
 		return force;
 	}
 	return Vector2D(0.0f);
-
 }
 
+// set the window to use
 void Boid::SetWindow(std::shared_ptr<sf::RenderWindow> window)
 {
 	m_window = window;
 }
 
-Vector2D Boid::PathFollowing(Vector2D pos, float magnitude)
+// path follow behaviour
+Vector2D Boid::PathFollowing(vector<Vector2D>& pathPoints, float magnitude)
 {
-	return Seek(pos, magnitude);
+	if (m_i == pathPoints.size()) { m_i = 0; }
+	return Seek(pathPoints[m_i], magnitude);
 }
 
+// wander behaviour
 Vector2D Boid::Wander(float magnitude, float angle)
 {
-	float randAngle = rand() % (int)angle;//-angle + rand() % (int)((angle + 1) - (-angle));
+	float randAngle = rand() % (int)angle;
 
 	float x1 = m_position.x + (m_direction.x - m_position.x) * cos(randAngle) - (m_direction.y - m_position.y) * sin(randAngle);
 	float y1 = m_position.y + (m_direction.x - m_position.x) * sin(randAngle) + (m_direction.y - m_position.y) * cos(randAngle);
 
-	return Vector2D(x1, y1);//Seek(Vector2D(x1, y1), magnitude);
+	return Vector2D(x1, y1);
 }
 
+// queue behaviour
 Vector2D Boid::Queue(vector<Boid>& vecBoid, float radius, float magnitude, float& perc)
 {
 	return Arrival(vecBoid[m_ID + 1].m_position, radius, magnitude, perc);
 }
 
+// leaderfollowing behaviour
 Vector2D Boid::LeaderFollowing(vector<Boid>& vecBoid, float radius, float magnitude, float& perc)
 {
 	return Arrival(vecBoid[vecBoid.size()-1].m_position, radius, magnitude, perc);
 }
 
+// arrival behaviour
 Vector2D Boid::Arrival(Vector2D pos, float radius, float magnitude, float& perc)
 {
 	if (magnitude <= 0.0f)
@@ -306,11 +308,11 @@ Vector2D Boid::Arrival(Vector2D pos, float radius, float magnitude, float& perc)
 		{
 			perc = 0.0f;
 		}
-		//magnitude *= b;
 	}
 	return Seek(pos, magnitude);
 }
 
+// avoid all instances
 Vector2D Boid::AvoidAll(vector<Boid>& vecBoid, Vector2D desiredForce, float tolerance, float magnitude)
 {
 	for (int i = 0; i < vecBoid.size(); ++i)
